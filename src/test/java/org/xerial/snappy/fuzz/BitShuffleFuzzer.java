@@ -62,7 +62,7 @@ public class BitShuffleFuzzer {
       result = BitShuffle.unshuffleLongArray(uncompressed);
     }
     catch( IOException e ){
-      return;
+      throw new RuntimeException(e);
     }
     
     if(Arrays.equals(original,result) == false)
