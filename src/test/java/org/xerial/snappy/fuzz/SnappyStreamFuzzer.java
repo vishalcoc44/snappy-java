@@ -44,7 +44,8 @@ public class SnappyStreamFuzzer {
       try (SnappyInputStream snappyIn = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buf = new byte[4096];
-        for (int readBytes = 0; (readBytes = snappyIn.read(buf)) != -1; ) {
+        int readBytes;
+        while ((readBytes = snappyIn.read(buf)) != -1) {
             out.write(buf, 0, readBytes);
         }
         out.flush();
