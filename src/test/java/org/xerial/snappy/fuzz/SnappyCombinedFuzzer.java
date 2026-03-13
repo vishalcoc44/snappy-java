@@ -311,16 +311,19 @@ public class SnappyCombinedFuzzer {
         byte[] input = data.consumeRemainingAsBytes();
         
         try {
-            ByteBuffer src = ByteBuffer.wrap(input);
-            ByteBuffer dst = ByteBuffer.allocate(Snappy.maxCompressedLength(input.length));
+            ByteBuffer src = ByteBuffer.allocateDirect(input.length);
+            src.put(input);
+            src.flip();
+            ByteBuffer dst = ByteBuffer.allocateDirect(Snappy.maxCompressedLength(input.length));
             int compressed = Snappy.compress(src, dst);
             
             dst.limit(compressed);
             dst.position(0);
-            ByteBuffer uncompressedBuf = ByteBuffer.allocate(input.length);
+            ByteBuffer uncompressedBuf = ByteBuffer.allocateDirect(input.length);
             int uncompressed = Snappy.uncompress(dst, uncompressedBuf);
             
             uncompressedBuf.limit(uncompressed);
+            uncompressedBuf.position(0);
             byte[] result = new byte[uncompressed];
             uncompressedBuf.get(result);
             
