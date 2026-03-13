@@ -72,6 +72,7 @@ public class SnappyCombinedFuzzer {
                 throw new IllegalStateException("Raw compress/uncompress failed");
             }
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
