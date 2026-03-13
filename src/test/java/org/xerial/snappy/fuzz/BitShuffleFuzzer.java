@@ -32,7 +32,7 @@ public class BitShuffleFuzzer {
     fuzz_bitshuffle_shorts(data.consumeShorts(SIZE));
   }
 
-  static void fuzz_bitshuffle_ints(int[] original){
+  static void fuzzBitshuffleInts(int[] original){
     int[] result;
 
     try{   
