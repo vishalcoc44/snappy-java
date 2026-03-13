@@ -149,7 +149,7 @@ public class SnappyCombinedFuzzer {
             new ByteArrayInputStream(data.consumeBytes(100)))) {
             while (invalidIn.read() != -1) {}
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            // Expected, ignore.
         }
     }
 
