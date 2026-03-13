@@ -81,12 +81,14 @@ public class SnappyCombinedFuzzer {
             byte[] rawUncompressed = new byte[uncompressedLen];
             Snappy.rawUncompress(rawCompressed, 0, rawCompressed.length, rawUncompressed, 0);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
             Snappy.isValidCompressedBuffer(input);
             Snappy.isValidCompressedBuffer(input, 0, input.length);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -95,6 +97,7 @@ public class SnappyCombinedFuzzer {
                 throw new IllegalStateException("maxCompressedLength too small");
             }
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -102,6 +105,7 @@ public class SnappyCombinedFuzzer {
             int len = Snappy.uncompressedLength(compressed);
             int len2 = Snappy.uncompressedLength(compressed, 0, compressed.length);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -109,6 +113,7 @@ public class SnappyCombinedFuzzer {
             byte[] compressedInts = Snappy.compress(intInput);
             int[] uncompressedInts = Snappy.uncompressIntArray(compressedInts);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -116,6 +121,7 @@ public class SnappyCombinedFuzzer {
             byte[] compressedLongs = Snappy.compress(longInput);
             long[] uncompressedLongs = Snappy.uncompressLongArray(compressedLongs);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -149,7 +155,7 @@ public class SnappyCombinedFuzzer {
             new ByteArrayInputStream(data.consumeBytes(100)))) {
             while (invalidIn.read() != -1) {}
         } catch (IOException e) {
-            // Expected, ignore.
+            throw new RuntimeException(e);
         }
     }
 
@@ -223,7 +229,7 @@ public class SnappyCombinedFuzzer {
         try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
             while (in.read() != -1) {}
         } catch (Exception e) {
-            // Expected, ignore.
+            throw new RuntimeException(e);
         }
     }
 
@@ -235,11 +241,13 @@ public class SnappyCombinedFuzzer {
             byte[] compressed = Snappy.compress(str);
             String uncompressed = Snappy.uncompressString(compressed);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
             int maxLen = Snappy.maxCompressedLength(input.length);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -250,6 +258,7 @@ public class SnappyCombinedFuzzer {
             byte[] compressedShorts = Snappy.compress(shortInput);
             short[] uncompressedShorts = Snappy.uncompressShortArray(compressedShorts);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -260,6 +269,7 @@ public class SnappyCombinedFuzzer {
             byte[] compressedChars = Snappy.compress(charInput);
             char[] uncompressedChars = Snappy.uncompressCharArray(compressedChars);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -269,6 +279,7 @@ public class SnappyCombinedFuzzer {
             byte[] shuffled = BitShuffle.shuffle(intInput);
             int[] unshuffled = BitShuffle.unshuffleIntArray(shuffled);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -276,6 +287,7 @@ public class SnappyCombinedFuzzer {
             byte[] shuffled = BitShuffle.shuffle(longInput);
             long[] unshuffled = BitShuffle.unshuffleLongArray(shuffled);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -283,6 +295,7 @@ public class SnappyCombinedFuzzer {
             byte[] shuffled = BitShuffle.shuffle(shortInput);
             short[] unshuffled = BitShuffle.unshuffleShortArray(shuffled);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -296,16 +309,17 @@ public class SnappyCombinedFuzzer {
             out.close();
             byte[] compressed = compressedBuf.toByteArray();
             
-            SnappyInputStream in = new SnappyInputStream(
-                new ByteArrayInputStream(compressed));
-            ByteArrayOutputStream result = new ByteArrayOutputStream();
-            byte[] buf = new byte[1024];
-            int read;
-            while ((read = in.read(buf)) != -1) {
-                result.write(buf, 0, read);
+            try (SnappyInputStream in = new SnappyInputStream(
+                new ByteArrayInputStream(compressed))) {
+                ByteArrayOutputStream result = new ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int read;
+                while ((read = in.read(buf)) != -1) {
+                    result.write(buf, 0, read);
+                }
             }
-            in.close();
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -333,6 +347,7 @@ public class SnappyCombinedFuzzer {
                 throw new IllegalStateException("ByteBuffer compress failed");
             }
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
         try {
@@ -343,6 +358,7 @@ public class SnappyCombinedFuzzer {
             ByteBuffer directDst = ByteBuffer.allocateDirect(Snappy.maxCompressedLength(input.length));
             Snappy.compress(directSrc, directDst);
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }
