@@ -17,15 +17,11 @@
 package org.xerial.snappy.fuzz;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-
-import org.xerial.snappy.Snappy;
 import org.xerial.snappy.SnappyInputStream;
 import org.xerial.snappy.SnappyOutputStream;
-import org.xerial.snappy.SnappyCodec;
 import java.io.IOException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.BufferedInputStream;
 import java.util.Arrays;
 
 public class SnappyStreamFuzzer {
@@ -51,14 +47,11 @@ public class SnappyStreamFuzzer {
         out.flush();
         uncompressed = out.toByteArray();
       }
-    }
-    catch (IOException e)
-    {
+    } catch (IOException e) {
       throw new RuntimeException(e);
     }
     
-    if(Arrays.equals(original,uncompressed) == false)
-    {
+    if (!Arrays.equals(original, uncompressed)) {
       throw new IllegalStateException("Original and uncompressed data are different");
     }    
   }
