@@ -32,7 +32,7 @@ public class SnappyStreamFuzzer {
   public static void fuzzerTestOneInput(FuzzedDataProvider data) {    
 
     byte[] original = data.consumeRemainingAsBytes();
-    byte[] uncompressed;
+    byte[] uncompressed = null;
     
     try {
       ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
