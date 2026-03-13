@@ -130,25 +130,26 @@ public class SnappyCombinedFuzzer {
             byte[] compressed = compressedBuf.toByteArray();
             
             for (int bufferSize : new int[]{1, 64, 256, 1024, 4096}) {
-                SnappyFramedInputStream framedIn = new SnappyFramedInputStream(
-                    new ByteArrayInputStream(compressed), true);
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                byte[] buf = new byte[bufferSize];
-                int readBytes;
-                while ((readBytes = framedIn.read(buf)) != -1) {
-                    out.write(buf, 0, readBytes);
+                try (SnappyFramedInputStream framedIn = new SnappyFramedInputStream(
+                    new ByteArrayInputStream(compressed), true)) {
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    byte[] buf = new byte[bufferSize];
+                    int readBytes;
+                    while ((readBytes = framedIn.read(buf)) != -1) {
+                        out.write(buf, 0, readBytes);
+                    }
+                    out.flush();
                 }
-                out.flush();
             }
         } catch (IOException e) {
+            throw new RuntimeException(e);
         }
         
-        try {
-            byte[] invalidData = data.consumeBytes(100);
-            SnappyFramedInputStream invalidIn = new SnappyFramedInputStream(
-                new ByteArrayInputStream(invalidData));
+        try (SnappyFramedInputStream invalidIn = new SnappyFramedInputStream(
+            new ByteArrayInputStream(data.consumeBytes(100)))) {
             while (invalidIn.read() != -1) {}
         } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -207,22 +208,22 @@ public class SnappyCombinedFuzzer {
             out.close();
             byte[] compressed = compressedBuf.toByteArray();
             
-            SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(compressed));
-            ByteArrayOutputStream result = new ByteArrayOutputStream();
-            byte[] buf = new byte[1024];
-            int read;
-            while ((read = in.read(buf)) != -1) {
-                result.write(buf, 0, read);
+            try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
+                ByteArrayOutputStream result = new ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int read;
+                while ((read = in.read(buf)) != -1) {
+                    result.write(buf, 0, read);
+                }
             }
-            in.close();
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         
-        try {
-            byte[] invalid = data.consumeBytes(100);
-            SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(invalid));
+        try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
             while (in.read() != -1) {}
         } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 

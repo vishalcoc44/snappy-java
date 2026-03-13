@@ -40,18 +40,20 @@ public class SnappyStreamFuzzer {
       snappyOut.write(original);
       snappyOut.close();
       byte[] compressed = compressedBuf.toByteArray();
-      SnappyInputStream snappyIn = new SnappyInputStream(new ByteArrayInputStream(compressed));
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      byte[] buf = new byte[4096];
-      for (int readBytes = 0; (readBytes = snappyIn.read(buf)) != -1; ) {
-          out.write(buf, 0, readBytes);
+      
+      try (SnappyInputStream snappyIn = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        for (int readBytes = 0; (readBytes = snappyIn.read(buf)) != -1; ) {
+            out.write(buf, 0, readBytes);
+        }
+        out.flush();
+        uncompressed = out.toByteArray();
       }
-      out.flush();
-      uncompressed = out.toByteArray();
     }
     catch (IOException e)
     {
-      return;
+      throw new RuntimeException(e);
     }
     
     if(Arrays.equals(original,uncompressed) == false)
