@@ -223,7 +223,7 @@ public class SnappyCombinedFuzzer {
         try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
             while (in.read() != -1) {}
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            // Expected, ignore.
         }
     }
 
