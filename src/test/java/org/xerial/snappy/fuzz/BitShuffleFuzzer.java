@@ -28,6 +28,8 @@ public class BitShuffleFuzzer {
     fuzzBitshuffle(data.consumeInts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "int[]");
     fuzzBitshuffle(data.consumeLongs(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleLongArray, "long[]");
     fuzzBitshuffle(data.consumeShorts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleShortArray, "short[]");
+    fuzzBitshuffle(data.consumeFloats(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleFloatArray, "float[]");
+    fuzzBitshuffle(data.consumeDoubles(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleDoubleArray, "double[]");
   }
 
   @FunctionalInterface
