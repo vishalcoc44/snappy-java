@@ -28,7 +28,6 @@ public class SnappyStreamFuzzer {
   public static void fuzzerTestOneInput(FuzzedDataProvider data) {    
 
     byte[] original = data.consumeRemainingAsBytes();
-    byte[] uncompressed = null;
     
     try {
       ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
@@ -37,6 +36,7 @@ public class SnappyStreamFuzzer {
       snappyOut.close();
       byte[] compressed = compressedBuf.toByteArray();
       
+      byte[] uncompressed;
       try (SnappyInputStream snappyIn = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buf = new byte[4096];
@@ -47,12 +47,12 @@ public class SnappyStreamFuzzer {
         out.flush();
         uncompressed = out.toByteArray();
       }
+
+      if (!Arrays.equals(original, uncompressed)) {
+        throw new IllegalStateException("Original and uncompressed data are different");
+      }
     } catch (IOException e) {
       throw new RuntimeException(e);
-    }
-    
-    if (!Arrays.equals(original, uncompressed)) {
-      throw new IllegalStateException("Original and uncompressed data are different");
     }    
   }
 }

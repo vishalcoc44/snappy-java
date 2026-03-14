@@ -33,6 +33,7 @@ import java.util.Arrays;
 
 public class SnappyCombinedFuzzer {
     
+    @FunctionalInterface
     private interface FuzzBlock {
         void run() throws Exception;
     }
@@ -180,14 +181,15 @@ public class SnappyCombinedFuzzer {
 
     private static void testCrc32C(FuzzedDataProvider data) {
         byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-        byte[] chunk1 = data.consumeBytes(50);
-        byte[] chunk2 = data.consumeBytes(50);
         
         PureJavaCrc32C crc = new PureJavaCrc32C();
         crc.update(input, 0, input.length);
         long value = crc.getValue();
         
         int intValue = crc.getIntegerValue();
+        if ((int) value != intValue) {
+            throw new IllegalStateException("CRC32C int value mismatch");
+        }
         
         crc.reset();
         crc.update(input, 0, input.length);
@@ -200,41 +202,13 @@ public class SnappyCombinedFuzzer {
         for (int i = 0; i < Math.min(input.length, 1000); i++) {
             crcChunked.update(input[i] & 0xFF);
         }
-        long chunkedValue = crcChunked.getValue();
         
         PureJavaCrc32C crcWhole = new PureJavaCrc32C();
         crcWhole.update(input, 0, input.length);
         long wholeValue = crcWhole.getValue();
         
-        if (input.length <= 1000 && chunkedValue != wholeValue) {
+        if (input.length <= 1000 && crcChunked.getValue() != wholeValue) {
             throw new IllegalStateException("CRC32C chunked vs whole mismatch");
-        }
-        
-        if (chunk1.length > 0 && chunk2.length > 0) {
-            PureJavaCrc32C crc1 = new PureJavaCrc32C();
-            crc1.update(input, 0, input.length);
-            long crc1Value = crc1.getValue();
-            
-            PureJavaCrc32C crc2 = new PureJavaCrc32C();
-            crc2.update(chunk1, 0, chunk1.length);
-            crc2.update(chunk2, 0, chunk2.length);
-            long crc2Value = crc2.getValue();
-        }
-        
-        PureJavaCrc32C crcEmpty = new PureJavaCrc32C();
-        crcEmpty.update(new byte[0], 0, 0);
-        long emptyValue = crcEmpty.getValue();
-        
-        if (input.length > 0) {
-            PureJavaCrc32C crcSingle = new PureJavaCrc32C();
-            crcSingle.update(input[0] & 0xFF);
-            long singleValue = crcSingle.getValue();
-        }
-        
-        if (input.length > 4) {
-            PureJavaCrc32C crcOffset = new PureJavaCrc32C();
-            crcOffset.update(input, 1, input.length - 1);
-            long offsetValue = crcOffset.getValue();
         }
     }
 
