@@ -24,35 +24,50 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 
+/**
+ * Fuzzer for Snappy's block-based stream format, as implemented by
+ * {@link SnappyOutputStream} and {@link SnappyInputStream}.
+ * This is different from the "x-snappy-framed" format.
+ */
 public class SnappyStreamFuzzer {
-  public static void fuzzerTestOneInput(FuzzedDataProvider data) {    
-
-    byte[] original = data.consumeRemainingAsBytes();
     
-    try {
-      ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
-      SnappyOutputStream snappyOut = new SnappyOutputStream(compressedBuf);
-      snappyOut.write(original);
-      snappyOut.close();
-      byte[] compressed = compressedBuf.toByteArray();
-      
-      byte[] uncompressed;
-      try (SnappyInputStream snappyIn = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int readBytes;
-        while ((readBytes = snappyIn.read(buf)) != -1) {
-            out.write(buf, 0, readBytes);
+    @FunctionalInterface
+    private interface FuzzBlock {
+        void run() throws Exception;
+    }
+    
+    private static void runFuzz(FuzzBlock block) {
+        try {
+            block.run();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        out.flush();
-        uncompressed = out.toByteArray();
-      }
+    }
+    
+    public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+        byte[] original = data.consumeRemainingAsBytes();
+        
+        runFuzz(() -> {
+            ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
+            try (SnappyOutputStream snappyOut = new SnappyOutputStream(compressedBuf)) {
+                snappyOut.write(original);
+            }
+            byte[] compressed = compressedBuf.toByteArray();
 
-      if (!Arrays.equals(original, uncompressed)) {
-        throw new IllegalStateException("Original and uncompressed data are different");
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }    
-  }
+            byte[] uncompressed;
+            try (SnappyInputStream snappyIn = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buf = new byte[4096];
+                int readBytes;
+                while ((readBytes = snappyIn.read(buf)) != -1) {
+                    out.write(buf, 0, readBytes);
+                }
+                uncompressed = out.toByteArray();
+            }
+
+            if (!Arrays.equals(original, uncompressed)) {
+                throw new IllegalStateException("Original and uncompressed data are different");
+            }
+        });
+    }
 }
