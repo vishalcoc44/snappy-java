@@ -20,62 +20,43 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import org.xerial.snappy.Snappy;
 import org.xerial.snappy.BitShuffle;
 import java.util.Arrays;
+import java.util.function.Function;
 
 public class BitShuffleFuzzer {
   private static final int SIZE = 4096;
 
   public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    fuzzBitshuffleInts(data.consumeInts(SIZE));
-    fuzzBitshuffleLongs(data.consumeLongs(SIZE));
-    fuzzBitshuffleShorts(data.consumeShorts(SIZE));
-  }
-
-  private static void runFuzz(RunnableWithException block) {
-    try {
-      block.run();
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    fuzzBitshuffle(data.consumeInts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "int[]");
+    fuzzBitshuffle(data.consumeLongs(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleLongArray, "long[]");
+    fuzzBitshuffle(data.consumeShorts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleShortArray, "short[]");
   }
 
   @FunctionalInterface
-  private interface RunnableWithException {
+  private interface ExceptionRunnable {
     void run() throws Exception;
   }
 
-  private static void fuzzBitshuffleInts(int[] original) {
-    runFuzz(() -> {
-      byte[] shuffledByteArray = BitShuffle.shuffle(original);
-      byte[] compressed = Snappy.compress(shuffledByteArray);
-      byte[] uncompressed = Snappy.uncompress(compressed);
-      int[] result = BitShuffle.unshuffleIntArray(uncompressed);
-      if (!Arrays.equals(original, result)) {
-        throw new IllegalStateException("Original and uncompressed data are different");
-      }
-    });
+  @FunctionalInterface
+  private interface ShuffleFn<T> {
+    byte[] apply(T input) throws Exception;
   }
 
-  private static void fuzzBitshuffleLongs(long[] original) {
-    runFuzz(() -> {
-      byte[] shuffledByteArray = BitShuffle.shuffle(original);
-      byte[] compressed = Snappy.compress(shuffledByteArray);
-      byte[] uncompressed = Snappy.uncompress(compressed);
-      long[] result = BitShuffle.unshuffleLongArray(uncompressed);
-      if (!Arrays.equals(original, result)) {
-        throw new IllegalStateException("Original and uncompressed data are different");
-      }
-    });
+  @FunctionalInterface
+  private interface UnshuffleFn<T> {
+    T apply(byte[] input) throws Exception;
   }
 
-  private static void fuzzBitshuffleShorts(short[] original) {
-    runFuzz(() -> {
-      byte[] shuffledByteArray = BitShuffle.shuffle(original);
+  private static <T> void fuzzBitshuffle(T original, ShuffleFn<T> shuffle, UnshuffleFn<T> unshuffle, String typeName) {
+    try {
+      byte[] shuffledByteArray = shuffle.apply(original);
       byte[] compressed = Snappy.compress(shuffledByteArray);
       byte[] uncompressed = Snappy.uncompress(compressed);
-      short[] result = BitShuffle.unshuffleShortArray(uncompressed);
-      if (!Arrays.equals(original, result)) {
-        throw new IllegalStateException("Original and uncompressed data are different");
+      T result = unshuffle.apply(uncompressed);
+      if (!Arrays.equals((Object[]) original, (Object[]) result)) {
+        throw new IllegalStateException("Original and uncompressed " + typeName + " data are different");
       }
-    });
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 }

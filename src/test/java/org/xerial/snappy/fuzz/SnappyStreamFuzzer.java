@@ -31,11 +31,6 @@ import java.util.Arrays;
  */
 public class SnappyStreamFuzzer {
     
-    @FunctionalInterface
-    private interface FuzzBlock {
-        void run() throws Exception;
-    }
-    
     private static void runFuzz(FuzzBlock block) {
         try {
             block.run();

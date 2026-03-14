@@ -33,11 +33,6 @@ import java.util.Arrays;
 
 public class SnappyCombinedFuzzer {
     
-    @FunctionalInterface
-    private interface FuzzBlock {
-        void run() throws Exception;
-    }
-    
     private static void runFuzz(FuzzBlock block) {
         try {
             block.run();
@@ -199,15 +194,14 @@ public class SnappyCombinedFuzzer {
         }
         
         PureJavaCrc32C crcChunked = new PureJavaCrc32C();
-        for (int i = 0; i < Math.min(input.length, 1000); i++) {
+        for (int i = 0; i < input.length; i++) {
             crcChunked.update(input[i] & 0xFF);
         }
         
         PureJavaCrc32C crcWhole = new PureJavaCrc32C();
         crcWhole.update(input, 0, input.length);
-        long wholeValue = crcWhole.getValue();
         
-        if (input.length <= 1000 && crcChunked.getValue() != wholeValue) {
+        if (crcChunked.getValue() != crcWhole.getValue()) {
             throw new IllegalStateException("CRC32C chunked vs whole mismatch");
         }
     }
