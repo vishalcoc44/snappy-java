@@ -19,8 +19,7 @@ package org.xerial.snappy.fuzz;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import org.xerial.snappy.Snappy;
 import org.xerial.snappy.BitShuffle;
-import java.util.Arrays;
-import java.util.function.Function;
+import java.util.Objects;
 
 public class BitShuffleFuzzer {
   private static final int SIZE = 4096;
@@ -29,11 +28,6 @@ public class BitShuffleFuzzer {
     fuzzBitshuffle(data.consumeInts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "int[]");
     fuzzBitshuffle(data.consumeLongs(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleLongArray, "long[]");
     fuzzBitshuffle(data.consumeShorts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleShortArray, "short[]");
-  }
-
-  @FunctionalInterface
-  private interface ExceptionRunnable {
-    void run() throws Exception;
   }
 
   @FunctionalInterface
@@ -52,7 +46,7 @@ public class BitShuffleFuzzer {
       byte[] compressed = Snappy.compress(shuffledByteArray);
       byte[] uncompressed = Snappy.uncompress(compressed);
       T result = unshuffle.apply(uncompressed);
-      if (!Arrays.equals((Object[]) original, (Object[]) result)) {
+      if (!Objects.deepEquals(original, result)) {
         throw new IllegalStateException("Original and uncompressed " + typeName + " data are different");
       }
     } catch (Exception e) {

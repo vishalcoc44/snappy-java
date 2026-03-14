@@ -19,7 +19,6 @@ package org.xerial.snappy.fuzz;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import org.xerial.snappy.SnappyInputStream;
 import org.xerial.snappy.SnappyOutputStream;
-import java.io.IOException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;

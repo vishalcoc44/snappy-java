@@ -28,7 +28,6 @@ import org.xerial.snappy.PureJavaCrc32C;
 import java.nio.ByteBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.Arrays;
 
 public class SnappyCombinedFuzzer {
