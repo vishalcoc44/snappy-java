@@ -209,7 +209,7 @@ public class SnappyCombinedFuzzer {
         runFuzz(() -> {
             byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
             ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
-            SnappyOutputStream out = new SnappyOutputStream(compressedBuf, -1);
+            SnappyOutputStream out = new SnappyOutputStream(compressedBuf, SnappyOutputStream.MIN_BLOCK_SIZE);
             out.write(original);
             out.close();
             byte[] compressed = compressedBuf.toByteArray();
