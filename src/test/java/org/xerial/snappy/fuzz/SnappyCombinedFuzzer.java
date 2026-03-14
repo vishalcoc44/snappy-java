@@ -32,6 +32,19 @@ import java.io.IOException;
 import java.util.Arrays;
 
 public class SnappyCombinedFuzzer {
+    
+    private interface FuzzBlock {
+        void run() throws Exception;
+    }
+    
+    private static void runFuzz(FuzzBlock block) {
+        try {
+            block.run();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         int selector = data.consumeInt(0, 7);
         switch (selector) {
@@ -65,70 +78,56 @@ public class SnappyCombinedFuzzer {
     private static void testRawApi(FuzzedDataProvider data) {
         byte[] input = data.consumeRemainingAsBytes();
         
-        try {
+        runFuzz(() -> {
             byte[] compressed = Snappy.compress(input);
             byte[] uncompressed = Snappy.uncompress(compressed);
             if (!Arrays.equals(input, uncompressed)) {
                 throw new IllegalStateException("Raw compress/uncompress failed");
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             byte[] rawCompressed = Snappy.rawCompress(input, input.length);
             int uncompressedLen = Snappy.uncompressedLength(rawCompressed);
             byte[] rawUncompressed = new byte[uncompressedLen];
             Snappy.rawUncompress(rawCompressed, 0, rawCompressed.length, rawUncompressed, 0);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             Snappy.isValidCompressedBuffer(input);
             Snappy.isValidCompressedBuffer(input, 0, input.length);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             int maxLen = Snappy.maxCompressedLength(input.length);
             if (maxLen < input.length) {
                 throw new IllegalStateException("maxCompressedLength too small");
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             byte[] compressed = Snappy.compress(input);
             int len = Snappy.uncompressedLength(compressed);
             int len2 = Snappy.uncompressedLength(compressed, 0, compressed.length);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             int[] intInput = data.consumeInts(100);
             byte[] compressedInts = Snappy.compress(intInput);
             int[] uncompressedInts = Snappy.uncompressIntArray(compressedInts);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             long[] longInput = data.consumeLongs(50);
             byte[] compressedLongs = Snappy.compress(longInput);
             long[] uncompressedLongs = Snappy.uncompressLongArray(compressedLongs);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     private static void testFramed(FuzzedDataProvider data) {
         byte[] original = data.consumeRemainingAsBytes();
         
-        try {
+        runFuzz(() -> {
             ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
             SnappyFramedOutputStream framedOut = new SnappyFramedOutputStream(compressedBuf);
             framedOut.write(original);
@@ -147,22 +146,22 @@ public class SnappyCombinedFuzzer {
                     out.flush();
                 }
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try (SnappyFramedInputStream invalidIn = new SnappyFramedInputStream(
-            new ByteArrayInputStream(data.consumeBytes(100)))) {
-            while (invalidIn.read() != -1) {}
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        runFuzz(() -> {
+            try (SnappyFramedInputStream invalidIn = new SnappyFramedInputStream(
+                new ByteArrayInputStream(data.consumeBytes(100)))) {
+                while (invalidIn.read() != -1) {}
+            }
+        });
     }
 
     private static void testCrc32C(FuzzedDataProvider data) {
         byte[] input = data.consumeRemainingAsBytes();
-        PureJavaCrc32C crc = new PureJavaCrc32C();
+        byte[] chunk1 = data.consumeBytes(50);
+        byte[] chunk2 = data.consumeBytes(50);
         
+        PureJavaCrc32C crc = new PureJavaCrc32C();
         crc.update(input, 0, input.length);
         long value = crc.getValue();
         
@@ -171,22 +170,22 @@ public class SnappyCombinedFuzzer {
         crc.reset();
         crc.update(input, 0, input.length);
         long value2 = crc.getValue();
+        if (value != value2) {
+            throw new IllegalStateException("CRC32C reset produced different value");
+        }
         
         PureJavaCrc32C crcChunked = new PureJavaCrc32C();
         for (int i = 0; i < Math.min(input.length, 1000); i++) {
             crcChunked.update(input[i] & 0xFF);
         }
         
-        if (input.length > 2) {
-            byte[] partial1 = data.consumeBytes(Math.min(10, input.length));
-            byte[] partial2 = data.consumeBytes(Math.min(10, input.length));
-            
+        if (chunk1.length > 0 && chunk2.length > 0) {
             PureJavaCrc32C crc1 = new PureJavaCrc32C();
             crc1.update(input, 0, input.length);
             
             PureJavaCrc32C crc2 = new PureJavaCrc32C();
-            crc2.update(partial1, 0, partial1.length);
-            crc2.update(partial2, 0, partial2.length);
+            crc2.update(chunk1, 0, chunk1.length);
+            crc2.update(chunk2, 0, chunk2.length);
         }
         
         PureJavaCrc32C crcEmpty = new PureJavaCrc32C();
@@ -207,7 +206,7 @@ public class SnappyCombinedFuzzer {
     private static void testBlockStream(FuzzedDataProvider data) {
         byte[] original = data.consumeRemainingAsBytes();
         
-        try {
+        runFuzz(() -> {
             ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
             SnappyOutputStream out = new SnappyOutputStream(compressedBuf, -1);
             out.write(original);
@@ -222,87 +221,80 @@ public class SnappyCombinedFuzzer {
                     result.write(buf, 0, read);
                 }
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
-            while (in.read() != -1) {}
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        runFuzz(() -> {
+            try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
+                while (in.read() != -1) {}
+            }
+        });
     }
 
     private static void testUtil(FuzzedDataProvider data) {
         byte[] input = data.consumeRemainingAsBytes();
         
-        try {
+        runFuzz(() -> {
             String str = new String(input, java.nio.charset.StandardCharsets.UTF_8);
             byte[] compressed = Snappy.compress(str);
             String uncompressed = Snappy.uncompressString(compressed);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             int maxLen = Snappy.maxCompressedLength(input.length);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             short[] shortInput = new short[Math.min(100, input.length / 2)];
             for (int i = 0; i < shortInput.length; i++) {
                 shortInput[i] = (short) data.consumeInt();
             }
             byte[] compressedShorts = Snappy.compress(shortInput);
             short[] uncompressedShorts = Snappy.uncompressShortArray(compressedShorts);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             char[] charInput = new char[Math.min(100, input.length)];
             for (int i = 0; i < charInput.length; i++) {
                 charInput[i] = (char) data.consumeInt();
             }
             byte[] compressedChars = Snappy.compress(charInput);
             char[] uncompressedChars = Snappy.uncompressCharArray(compressedChars);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     private static void testBitShuffle(FuzzedDataProvider data) {
-        try {
+        runFuzz(() -> {
             int[] intInput = data.consumeInts(100);
             byte[] shuffled = BitShuffle.shuffle(intInput);
             int[] unshuffled = BitShuffle.unshuffleIntArray(shuffled);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+            if (!Arrays.equals(intInput, unshuffled)) {
+                throw new IllegalStateException("BitShuffle int failed");
+            }
+        });
         
-        try {
+        runFuzz(() -> {
             long[] longInput = data.consumeLongs(50);
             byte[] shuffled = BitShuffle.shuffle(longInput);
             long[] unshuffled = BitShuffle.unshuffleLongArray(shuffled);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+            if (!Arrays.equals(longInput, unshuffled)) {
+                throw new IllegalStateException("BitShuffle long failed");
+            }
+        });
         
-        try {
+        runFuzz(() -> {
             short[] shortInput = data.consumeShorts(100);
             byte[] shuffled = BitShuffle.shuffle(shortInput);
             short[] unshuffled = BitShuffle.unshuffleShortArray(shuffled);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+            if (!Arrays.equals(shortInput, unshuffled)) {
+                throw new IllegalStateException("BitShuffle short failed");
+            }
+        });
     }
 
     private static void testHadoopStream(FuzzedDataProvider data) {
         byte[] original = data.consumeRemainingAsBytes();
         
-        try {
+        runFuzz(() -> {
             ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
             SnappyHadoopCompatibleOutputStream out = new SnappyHadoopCompatibleOutputStream(compressedBuf);
             out.write(original);
@@ -318,15 +310,13 @@ public class SnappyCombinedFuzzer {
                     result.write(buf, 0, read);
                 }
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     private static void testByteBuffer(FuzzedDataProvider data) {
         byte[] input = data.consumeRemainingAsBytes();
         
-        try {
+        runFuzz(() -> {
             ByteBuffer src = ByteBuffer.allocateDirect(input.length);
             src.put(input);
             src.flip();
@@ -346,19 +336,15 @@ public class SnappyCombinedFuzzer {
             if (!Arrays.equals(input, result)) {
                 throw new IllegalStateException("ByteBuffer compress failed");
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
         
-        try {
+        runFuzz(() -> {
             ByteBuffer directSrc = ByteBuffer.allocateDirect(input.length);
             directSrc.put(input);
             directSrc.flip();
             
             ByteBuffer directDst = ByteBuffer.allocateDirect(Snappy.maxCompressedLength(input.length));
             Snappy.compress(directSrc, directDst);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
     }
 }
