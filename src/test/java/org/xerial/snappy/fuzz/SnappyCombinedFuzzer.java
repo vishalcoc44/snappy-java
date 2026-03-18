@@ -28,6 +28,7 @@ import org.xerial.snappy.PureJavaCrc32C;
 import java.nio.ByteBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 
 public class SnappyCombinedFuzzer {
@@ -96,9 +97,12 @@ public class SnappyCombinedFuzzer {
         });
 
         runFuzz(() -> {
-            byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-            Snappy.isValidCompressedBuffer(input);
-            Snappy.isValidCompressedBuffer(input, 0, input.length);
+            try {
+                byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                Snappy.isValidCompressedBuffer(input);
+                Snappy.isValidCompressedBuffer(input, 0, input.length);
+            } catch (IOException e) {
+            }
         });
 
         runFuzz(() -> {
@@ -169,6 +173,7 @@ public class SnappyCombinedFuzzer {
             try (SnappyFramedInputStream invalidIn = new SnappyFramedInputStream(
                 new ByteArrayInputStream(data.consumeBytes(100)))) {
                 while (invalidIn.read() != -1) {}
+            } catch (IOException e) {
             }
         });
     }
@@ -230,6 +235,7 @@ public class SnappyCombinedFuzzer {
         runFuzz(() -> {
             try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
                 while (in.read() != -1) {}
+            } catch (IOException e) {
             }
         });
     }
