@@ -27,7 +27,7 @@ public class BitShuffleFuzzer {
 
   @FuzzTest
   public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    switch (data.consumeInt(0, 8)) {
+    switch (data.consumeInt(0, 9)) {
       case 0:
         fuzzBitshuffle(data.consumeInts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "int[]");
         break;
@@ -54,6 +54,9 @@ public class BitShuffleFuzzer {
         break;
       case 8:
         fuzzBitshuffle(new short[0], BitShuffle::shuffle, BitShuffle::unshuffleShortArray, "empty short[]");
+        break;
+      case 9:
+        fuzzBitshuffle(new long[0], BitShuffle::shuffle, BitShuffle::unshuffleLongArray, "empty long[]");
         break;
     }
   }
