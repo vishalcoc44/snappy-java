@@ -72,76 +72,86 @@ public class SnappyCombinedFuzzer {
     }
 
     private static void testRawApi(FuzzedDataProvider data) {
-        runFuzz(() -> {
-            byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-            byte[] compressed = Snappy.compress(input);
-            byte[] uncompressed = Snappy.uncompress(compressed);
-            if (!Arrays.equals(input, uncompressed)) {
-                throw new IllegalStateException("Raw compress/uncompress failed");
-            }
-        });
-
-        runFuzz(() -> {
-            byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-            byte[] rawCompressed = Snappy.rawCompress(input, input.length);
-            if (Snappy.isValidCompressedBuffer(rawCompressed)) {
-                int uncompressedLen = Snappy.uncompressedLength(rawCompressed);
-                if (uncompressedLen == input.length) {
-                    byte[] rawUncompressed = new byte[uncompressedLen];
-                    Snappy.rawUncompress(rawCompressed, 0, rawCompressed.length, rawUncompressed, 0);
-                    if (!Arrays.equals(input, rawUncompressed)) {
-                        throw new IllegalStateException("Raw compress/uncompress with byte[] failed");
+        switch (data.consumeInt(0, 6)) {
+            case 0:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    byte[] compressed = Snappy.compress(input);
+                    byte[] uncompressed = Snappy.uncompress(compressed);
+                    if (!Arrays.equals(input, uncompressed)) {
+                        throw new IllegalStateException("Raw compress/uncompress failed");
                     }
-                }
-            }
-        });
-
-        runFuzz(() -> {
-            try {
-                byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-                Snappy.isValidCompressedBuffer(input);
-                Snappy.isValidCompressedBuffer(input, 0, input.length);
-            } catch (IOException e) {
-            }
-        });
-
-        runFuzz(() -> {
-            int inputLength = data.consumeInt(0, 4096);
-            int maxLen = Snappy.maxCompressedLength(inputLength);
-            if (maxLen < inputLength) {
-                throw new IllegalStateException("maxCompressedLength too small");
-            }
-        });
-
-        runFuzz(() -> {
-            byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-            byte[] compressed = Snappy.compress(input);
-            if (Snappy.isValidCompressedBuffer(compressed)) {
-                int len = Snappy.uncompressedLength(compressed);
-                int len2 = Snappy.uncompressedLength(compressed, 0, compressed.length);
-                if (len != input.length || len2 != input.length) {
-                    throw new IllegalStateException("uncompressedLength did not match original length");
-                }
-            }
-        });
-
-        runFuzz(() -> {
-            int[] intInput = data.consumeInts(data.consumeInt(0, 100));
-            byte[] compressedInts = Snappy.compress(intInput);
-            int[] uncompressedInts = Snappy.uncompressIntArray(compressedInts);
-            if (!Arrays.equals(intInput, uncompressedInts)) {
-                throw new IllegalStateException("Int array roundtrip failed");
-            }
-        });
-
-        runFuzz(() -> {
-            long[] longInput = data.consumeLongs(data.consumeInt(0, 50));
-            byte[] compressedLongs = Snappy.compress(longInput);
-            long[] uncompressedLongs = Snappy.uncompressLongArray(compressedLongs);
-            if (!Arrays.equals(longInput, uncompressedLongs)) {
-                throw new IllegalStateException("Long array roundtrip failed");
-            }
-        });
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    byte[] rawCompressed = Snappy.rawCompress(input, input.length);
+                    if (Snappy.isValidCompressedBuffer(rawCompressed)) {
+                        int uncompressedLen = Snappy.uncompressedLength(rawCompressed);
+                        if (uncompressedLen == input.length) {
+                            byte[] rawUncompressed = new byte[uncompressedLen];
+                            Snappy.rawUncompress(rawCompressed, 0, rawCompressed.length, rawUncompressed, 0);
+                            if (!Arrays.equals(input, rawUncompressed)) {
+                                throw new IllegalStateException("Raw compress/uncompress with byte[] failed");
+                            }
+                        }
+                    }
+                });
+                break;
+            case 2:
+                runFuzz(() -> {
+                    try {
+                        byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                        Snappy.isValidCompressedBuffer(input);
+                        Snappy.isValidCompressedBuffer(input, 0, input.length);
+                    } catch (IOException e) {
+                    }
+                });
+                break;
+            case 3:
+                runFuzz(() -> {
+                    int inputLength = data.consumeInt(0, 4096);
+                    int maxLen = Snappy.maxCompressedLength(inputLength);
+                    if (maxLen < inputLength) {
+                        throw new IllegalStateException("maxCompressedLength too small");
+                    }
+                });
+                break;
+            case 4:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    byte[] compressed = Snappy.compress(input);
+                    if (Snappy.isValidCompressedBuffer(compressed)) {
+                        int len = Snappy.uncompressedLength(compressed);
+                        int len2 = Snappy.uncompressedLength(compressed, 0, compressed.length);
+                        if (len != input.length || len2 != input.length) {
+                            throw new IllegalStateException("uncompressedLength did not match original length");
+                        }
+                    }
+                });
+                break;
+            case 5:
+                runFuzz(() -> {
+                    int[] intInput = data.consumeInts(data.consumeInt(0, 100));
+                    byte[] compressedInts = Snappy.compress(intInput);
+                    int[] uncompressedInts = Snappy.uncompressIntArray(compressedInts);
+                    if (!Arrays.equals(intInput, uncompressedInts)) {
+                        throw new IllegalStateException("Int array roundtrip failed");
+                    }
+                });
+                break;
+            case 6:
+                runFuzz(() -> {
+                    long[] longInput = data.consumeLongs(data.consumeInt(0, 50));
+                    byte[] compressedLongs = Snappy.compress(longInput);
+                    long[] uncompressedLongs = Snappy.uncompressLongArray(compressedLongs);
+                    if (!Arrays.equals(longInput, uncompressedLongs)) {
+                        throw new IllegalStateException("Long array roundtrip failed");
+                    }
+                });
+                break;
+        }
     }
 
     private static void testFramed(FuzzedDataProvider data) {

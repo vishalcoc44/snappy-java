@@ -25,11 +25,23 @@ public class BitShuffleFuzzer {
   private static final int SIZE = 4096;
 
   public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    fuzzBitshuffle(data.consumeInts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "int[]");
-    fuzzBitshuffle(data.consumeLongs(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleLongArray, "long[]");
-    fuzzBitshuffle(data.consumeShorts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleShortArray, "short[]");
-    fuzzBitshuffle(data.consumeFloats(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleFloatArray, "float[]");
-    fuzzBitshuffle(data.consumeDoubles(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleDoubleArray, "double[]");
+    switch (data.consumeInt(0, 4)) {
+      case 0:
+        fuzzBitshuffle(data.consumeInts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "int[]");
+        break;
+      case 1:
+        fuzzBitshuffle(data.consumeLongs(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleLongArray, "long[]");
+        break;
+      case 2:
+        fuzzBitshuffle(data.consumeShorts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleShortArray, "short[]");
+        break;
+      case 3:
+        fuzzBitshuffle(data.consumeFloats(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleFloatArray, "float[]");
+        break;
+      case 4:
+        fuzzBitshuffle(data.consumeDoubles(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleDoubleArray, "double[]");
+        break;
+    }
   }
 
   @FunctionalInterface
