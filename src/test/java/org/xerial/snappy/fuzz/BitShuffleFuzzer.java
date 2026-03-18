@@ -17,6 +17,7 @@
 package org.xerial.snappy.fuzz;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import com.code_intelligence.jazzer.junit.FuzzTest;
 import org.xerial.snappy.Snappy;
 import org.xerial.snappy.BitShuffle;
 import java.util.Objects;
@@ -24,8 +25,9 @@ import java.util.Objects;
 public class BitShuffleFuzzer {
   private static final int SIZE = 4096;
 
+  @FuzzTest
   public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-    switch (data.consumeInt(0, 4)) {
+    switch (data.consumeInt(0, 8)) {
       case 0:
         fuzzBitshuffle(data.consumeInts(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "int[]");
         break;
@@ -40,6 +42,18 @@ public class BitShuffleFuzzer {
         break;
       case 4:
         fuzzBitshuffle(data.consumeDoubles(SIZE), BitShuffle::shuffle, BitShuffle::unshuffleDoubleArray, "double[]");
+        break;
+      case 5:
+        fuzzBitshuffle(new int[0], BitShuffle::shuffle, BitShuffle::unshuffleIntArray, "empty int[]");
+        break;
+      case 6:
+        fuzzBitshuffle(new float[0], BitShuffle::shuffle, BitShuffle::unshuffleFloatArray, "empty float[]");
+        break;
+      case 7:
+        fuzzBitshuffle(new double[0], BitShuffle::shuffle, BitShuffle::unshuffleDoubleArray, "empty double[]");
+        break;
+      case 8:
+        fuzzBitshuffle(new short[0], BitShuffle::shuffle, BitShuffle::unshuffleShortArray, "empty short[]");
         break;
     }
   }

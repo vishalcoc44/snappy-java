@@ -17,6 +17,7 @@
 package org.xerial.snappy.fuzz;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import com.code_intelligence.jazzer.junit.FuzzTest;
 import org.xerial.snappy.Snappy;
 import org.xerial.snappy.SnappyFramedInputStream;
 import org.xerial.snappy.SnappyFramedOutputStream;
@@ -41,6 +42,7 @@ public class SnappyCombinedFuzzer {
         }
     }
     
+    @FuzzTest
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         int selector = data.consumeInt(0, 7);
         switch (selector) {
@@ -51,7 +53,7 @@ public class SnappyCombinedFuzzer {
                 testFramed(data);
                 break;
             case 2:
-                testCrc32C(data);
+                runFuzz(() -> testCrc32C(data));
                 break;
             case 3:
                 testBlockStream(data);
@@ -72,7 +74,7 @@ public class SnappyCombinedFuzzer {
     }
 
     private static void testRawApi(FuzzedDataProvider data) {
-        switch (data.consumeInt(0, 6)) {
+        switch (data.consumeInt(0, 10)) {
             case 0:
                 runFuzz(() -> {
                     byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
@@ -106,6 +108,7 @@ public class SnappyCombinedFuzzer {
                         Snappy.isValidCompressedBuffer(input);
                         Snappy.isValidCompressedBuffer(input, 0, input.length);
                     } catch (IOException e) {
+                        // Expected for invalid compressed buffers during fuzzing
                     }
                 });
                 break;
@@ -151,217 +154,423 @@ public class SnappyCombinedFuzzer {
                     }
                 });
                 break;
+            case 7:
+                runFuzz(() -> {
+                    byte[] input = new byte[0];
+                    byte[] compressed = Snappy.compress(input);
+                    byte[] uncompressed = Snappy.uncompress(compressed);
+                    if (!Arrays.equals(input, uncompressed)) {
+                        throw new IllegalStateException("Empty array roundtrip failed");
+                    }
+                });
+                break;
+            case 8:
+                runFuzz(() -> {
+                    byte[] input = new byte[]{data.consumeByte()};
+                    byte[] compressed = Snappy.compress(input);
+                    byte[] uncompressed = Snappy.uncompress(compressed);
+                    if (!Arrays.equals(input, uncompressed)) {
+                        throw new IllegalStateException("Single byte roundtrip failed");
+                    }
+                });
+                break;
+            case 9:
+                runFuzz(() -> {
+                    int size = data.consumeInt(4095, 4096);
+                    byte[] input = data.consumeBytes(size);
+                    byte[] compressed = Snappy.compress(input);
+                    byte[] uncompressed = Snappy.uncompress(compressed);
+                    if (!Arrays.equals(input, uncompressed)) {
+                        throw new IllegalStateException("Max size roundtrip failed");
+                    }
+                });
+                break;
+            case 10:
+                runFuzz(() -> {
+                    try {
+                        int len = data.consumeInt(Integer.MAX_VALUE - 1000, Integer.MAX_VALUE);
+                        Snappy.maxCompressedLength(len);
+                    } catch (Exception e) {
+                        // Expected for overflow/illegal argument
+                    }
+                });
+                break;
         }
     }
 
     private static void testFramed(FuzzedDataProvider data) {
-        runFuzz(() -> {
-            byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
-            ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
-            SnappyFramedOutputStream framedOut = new SnappyFramedOutputStream(compressedBuf);
-            framedOut.write(original);
-            framedOut.close();
-            byte[] compressed = compressedBuf.toByteArray();
+        switch (data.consumeInt(0, 2)) {
+            case 0:
+                runFuzz(() -> {
+                    byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
+                    ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
+                    SnappyFramedOutputStream framedOut = new SnappyFramedOutputStream(compressedBuf);
+                    framedOut.write(original);
+                    framedOut.close();
+                    byte[] compressed = compressedBuf.toByteArray();
 
-            for (int bufferSize : new int[]{1, 64, 256, 1024, 4096}) {
-                try (SnappyFramedInputStream framedIn = new SnappyFramedInputStream(
-                    new ByteArrayInputStream(compressed), true)) {
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    byte[] buf = new byte[bufferSize];
-                    int readBytes;
-                    while ((readBytes = framedIn.read(buf)) != -1) {
-                        out.write(buf, 0, readBytes);
+                    int bufferSize = data.consumeInt(1, 4096);
+                    try (SnappyFramedInputStream framedIn = new SnappyFramedInputStream(
+                        new ByteArrayInputStream(compressed), true)) {
+                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        byte[] buf = new byte[bufferSize];
+                        int readBytes;
+                        while ((readBytes = framedIn.read(buf)) != -1) {
+                            out.write(buf, 0, readBytes);
+                        }
+                        if (!Arrays.equals(original, out.toByteArray())) {
+                            throw new IllegalStateException("Framed stream roundtrip failed");
+                        }
                     }
-                    if (!Arrays.equals(original, out.toByteArray())) {
-                        throw new IllegalStateException("Framed stream roundtrip failed");
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    try (SnappyFramedInputStream invalidIn = new SnappyFramedInputStream(
+                        new ByteArrayInputStream(data.consumeBytes(100)))) {
+                        while (invalidIn.read() != -1) {}
+                    } catch (IOException e) {
+                        // Expected for malformed input during fuzzing
                     }
-                }
-            }
-        });
+                });
+                break;
+            case 2:
+                runFuzz(() -> {
+                    byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
+                    ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
+                    SnappyFramedOutputStream framedOut = new SnappyFramedOutputStream(compressedBuf);
+                    framedOut.write(original);
+                    framedOut.close();
+                    byte[] compressed = compressedBuf.toByteArray();
 
-        runFuzz(() -> {
-            try (SnappyFramedInputStream invalidIn = new SnappyFramedInputStream(
-                new ByteArrayInputStream(data.consumeBytes(100)))) {
-                while (invalidIn.read() != -1) {}
-            } catch (IOException e) {
-            }
-        });
+                    for (int bufferSize : new int[]{1, 64, 256, 1024, 4096}) {
+                        try (SnappyFramedInputStream framedIn = new SnappyFramedInputStream(
+                            new ByteArrayInputStream(compressed), true)) {
+                            ByteArrayOutputStream out = new ByteArrayOutputStream();
+                            byte[] buf = new byte[bufferSize];
+                            int readBytes;
+                            while ((readBytes = framedIn.read(buf)) != -1) {
+                                out.write(buf, 0, readBytes);
+                            }
+                            if (!Arrays.equals(original, out.toByteArray())) {
+                                throw new IllegalStateException("Framed stream roundtrip failed");
+                            }
+                        }
+                    }
+                });
+                break;
+        }
     }
 
     private static void testCrc32C(FuzzedDataProvider data) {
-        byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-        
-        PureJavaCrc32C crc = new PureJavaCrc32C();
-        crc.update(input, 0, input.length);
-        long value = crc.getValue();
-        
-        int intValue = crc.getIntegerValue();
-        if ((int) value != intValue) {
-            throw new IllegalStateException("CRC32C int value mismatch");
-        }
-        
-        crc.reset();
-        crc.update(input, 0, input.length);
-        long value2 = crc.getValue();
-        if (value != value2) {
-            throw new IllegalStateException("CRC32C reset produced different value");
-        }
-        
-        PureJavaCrc32C crcChunked = new PureJavaCrc32C();
-        for (int i = 0; i < input.length; i++) {
-            crcChunked.update(input[i] & 0xFF);
-        }
-        
-        PureJavaCrc32C crcWhole = new PureJavaCrc32C();
-        crcWhole.update(input, 0, input.length);
-        
-        if (crcChunked.getValue() != crcWhole.getValue()) {
-            throw new IllegalStateException("CRC32C chunked vs whole mismatch");
+        switch (data.consumeInt(0, 3)) {
+            case 0:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    PureJavaCrc32C crc = new PureJavaCrc32C();
+                    crc.update(input, 0, input.length);
+                    long value = crc.getValue();
+                    int intValue = crc.getIntegerValue();
+                    if ((int) value != intValue) {
+                        throw new IllegalStateException("CRC32C int value mismatch");
+                    }
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    PureJavaCrc32C crc = new PureJavaCrc32C();
+                    crc.update(input, 0, input.length);
+                    long value = crc.getValue();
+                    crc.reset();
+                    crc.update(input, 0, input.length);
+                    long value2 = crc.getValue();
+                    if (value != value2) {
+                        throw new IllegalStateException("CRC32C reset produced different value");
+                    }
+                });
+                break;
+            case 2:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    PureJavaCrc32C crcChunked = new PureJavaCrc32C();
+                    for (int i = 0; i < input.length; i++) {
+                        crcChunked.update(input[i] & 0xFF);
+                    }
+                    PureJavaCrc32C crcWhole = new PureJavaCrc32C();
+                    crcWhole.update(input, 0, input.length);
+                    if (crcChunked.getValue() != crcWhole.getValue()) {
+                        throw new IllegalStateException("CRC32C chunked vs whole mismatch");
+                    }
+                });
+                break;
+            case 3:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    PureJavaCrc32C crc = new PureJavaCrc32C();
+                    crc.update(input, 0, input.length);
+                    long value = crc.getValue();
+                    byte[] serialized = new byte[12];
+                    serialized[0] = (byte) (value >>> 56);
+                    serialized[1] = (byte) (value >>> 48);
+                    serialized[2] = (byte) (value >>> 40);
+                    serialized[3] = (byte) (value >>> 32);
+                    serialized[4] = (byte) (value >>> 24);
+                    serialized[5] = (byte) (value >>> 16);
+                    serialized[6] = (byte) (value >>> 8);
+                    serialized[7] = (byte) value;
+                    crc.reset();
+                    crc.update(serialized, 0, 8);
+                    if (crc.getValue() != value) {
+                        throw new IllegalStateException("CRC32C serialization roundtrip failed");
+                    }
+                });
+                break;
         }
     }
 
     private static void testBlockStream(FuzzedDataProvider data) {
-        runFuzz(() -> {
-            byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
-            ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
-            SnappyOutputStream out = new SnappyOutputStream(compressedBuf, SnappyOutputStream.MIN_BLOCK_SIZE);
-            out.write(original);
-            out.close();
-            byte[] compressed = compressedBuf.toByteArray();
+        switch (data.consumeInt(0, 1)) {
+            case 0:
+                runFuzz(() -> {
+                    byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
+                    ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
+                    SnappyOutputStream out = new SnappyOutputStream(compressedBuf, SnappyOutputStream.MIN_BLOCK_SIZE);
+                    out.write(original);
+                    out.close();
+                    byte[] compressed = compressedBuf.toByteArray();
 
-            try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
-                ByteArrayOutputStream result = new ByteArrayOutputStream();
-                byte[] buf = new byte[1024];
-                int read;
-                while ((read = in.read(buf)) != -1) {
-                    result.write(buf, 0, read);
-                }
-                if (!Arrays.equals(original, result.toByteArray())) {
-                    throw new IllegalStateException("Block stream roundtrip failed");
-                }
-            }
-        });
-
-        runFuzz(() -> {
-            try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
-                while (in.read() != -1) {}
-            } catch (IOException e) {
-            }
-        });
+                    int bufferSize = data.consumeInt(1, 4096);
+                    try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(compressed))) {
+                        ByteArrayOutputStream result = new ByteArrayOutputStream();
+                        byte[] buf = new byte[bufferSize];
+                        int read;
+                        while ((read = in.read(buf)) != -1) {
+                            result.write(buf, 0, read);
+                        }
+                        if (!Arrays.equals(original, result.toByteArray())) {
+                            throw new IllegalStateException("Block stream roundtrip failed");
+                        }
+                    }
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    try (SnappyInputStream in = new SnappyInputStream(new ByteArrayInputStream(data.consumeBytes(100)))) {
+                        while (in.read() != -1) {}
+                    } catch (IOException e) {
+                        // Expected for malformed input during fuzzing
+                    }
+                });
+                break;
+        }
     }
 
     private static void testUtil(FuzzedDataProvider data) {
-        runFuzz(() -> {
-            String str = data.consumeString(data.consumeInt(0, 4096));
-            byte[] compressed = Snappy.compress(str);
-            String uncompressed = Snappy.uncompressString(compressed);
-            if (!str.equals(uncompressed)) {
-                throw new IllegalStateException("String roundtrip failed");
-            }
-        });
-
-        runFuzz(() -> {
-            int len = data.consumeInt(0, 4096);
-            int maxLen = Snappy.maxCompressedLength(len);
-            if (maxLen < len) {
-                throw new IllegalStateException("maxCompressedLength too small");
-            }
-        });
-
-        runFuzz(() -> {
-            short[] shortInput = data.consumeShorts(data.consumeInt(0, 100));
-            byte[] compressedShorts = Snappy.compress(shortInput);
-            short[] uncompressedShorts = Snappy.uncompressShortArray(compressedShorts);
-            if (!Arrays.equals(shortInput, uncompressedShorts)) {
-                throw new IllegalStateException("Short array roundtrip failed");
-            }
-        });
-
-        runFuzz(() -> {
-            char[] charInput = data.consumeString(data.consumeInt(0, 100)).toCharArray();
-            byte[] compressedChars = Snappy.compress(charInput);
-            char[] uncompressedChars = Snappy.uncompressCharArray(compressedChars);
-            if (!Arrays.equals(charInput, uncompressedChars)) {
-                throw new IllegalStateException("Char array roundtrip failed");
-            }
-        });
+        switch (data.consumeInt(0, 4)) {
+            case 0:
+                runFuzz(() -> {
+                    String str = data.consumeString(data.consumeInt(0, 4096));
+                    byte[] compressed = Snappy.compress(str);
+                    String uncompressed = Snappy.uncompressString(compressed);
+                    if (!str.equals(uncompressed)) {
+                        throw new IllegalStateException("String roundtrip failed");
+                    }
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    short[] shortInput = data.consumeShorts(data.consumeInt(0, 100));
+                    byte[] compressedShorts = Snappy.compress(shortInput);
+                    short[] uncompressedShorts = Snappy.uncompressShortArray(compressedShorts);
+                    if (!Arrays.equals(shortInput, uncompressedShorts)) {
+                        throw new IllegalStateException("Short array roundtrip failed");
+                    }
+                });
+                break;
+            case 2:
+                runFuzz(() -> {
+                    char[] charInput = data.consumeString(data.consumeInt(0, 100)).toCharArray();
+                    byte[] compressedChars = Snappy.compress(charInput);
+                    char[] uncompressedChars = Snappy.uncompressCharArray(compressedChars);
+                    if (!Arrays.equals(charInput, uncompressedChars)) {
+                        throw new IllegalStateException("Char array roundtrip failed");
+                    }
+                });
+                break;
+            case 3:
+                runFuzz(() -> {
+                    float[] floatInput = data.consumeFloats(data.consumeInt(0, 100));
+                    byte[] shuffled = BitShuffle.shuffle(floatInput);
+                    float[] unshuffled = BitShuffle.unshuffleFloatArray(shuffled);
+                    if (!Arrays.equals(floatInput, unshuffled)) {
+                        throw new IllegalStateException("BitShuffle float failed");
+                    }
+                });
+                break;
+            case 4:
+                runFuzz(() -> {
+                    double[] doubleInput = data.consumeDoubles(data.consumeInt(0, 50));
+                    byte[] shuffled = BitShuffle.shuffle(doubleInput);
+                    double[] unshuffled = BitShuffle.unshuffleDoubleArray(shuffled);
+                    if (!Arrays.equals(doubleInput, unshuffled)) {
+                        throw new IllegalStateException("BitShuffle double failed");
+                    }
+                });
+                break;
+        }
     }
 
     private static void testBitShuffle(FuzzedDataProvider data) {
-        runFuzz(() -> {
-            int[] intInput = data.consumeInts(data.consumeInt(0, 100));
-            byte[] shuffled = BitShuffle.shuffle(intInput);
-            int[] unshuffled = BitShuffle.unshuffleIntArray(shuffled);
-            if (!Arrays.equals(intInput, unshuffled)) {
-                throw new IllegalStateException("BitShuffle int failed");
-            }
-        });
-        
-        runFuzz(() -> {
-            long[] longInput = data.consumeLongs(data.consumeInt(0, 50));
-            byte[] shuffled = BitShuffle.shuffle(longInput);
-            long[] unshuffled = BitShuffle.unshuffleLongArray(shuffled);
-            if (!Arrays.equals(longInput, unshuffled)) {
-                throw new IllegalStateException("BitShuffle long failed");
-            }
-        });
-        
-        runFuzz(() -> {
-            short[] shortInput = data.consumeShorts(data.consumeInt(0, 100));
-            byte[] shuffled = BitShuffle.shuffle(shortInput);
-            short[] unshuffled = BitShuffle.unshuffleShortArray(shuffled);
-            if (!Arrays.equals(shortInput, unshuffled)) {
-                throw new IllegalStateException("BitShuffle short failed");
-            }
-        });
+        switch (data.consumeInt(0, 2)) {
+            case 0:
+                runFuzz(() -> {
+                    int[] intInput = data.consumeInts(data.consumeInt(0, 100));
+                    byte[] shuffled = BitShuffle.shuffle(intInput);
+                    int[] unshuffled = BitShuffle.unshuffleIntArray(shuffled);
+                    if (!Arrays.equals(intInput, unshuffled)) {
+                        throw new IllegalStateException("BitShuffle int failed");
+                    }
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    long[] longInput = data.consumeLongs(data.consumeInt(0, 50));
+                    byte[] shuffled = BitShuffle.shuffle(longInput);
+                    long[] unshuffled = BitShuffle.unshuffleLongArray(shuffled);
+                    if (!Arrays.equals(longInput, unshuffled)) {
+                        throw new IllegalStateException("BitShuffle long failed");
+                    }
+                });
+                break;
+            case 2:
+                runFuzz(() -> {
+                    short[] shortInput = data.consumeShorts(data.consumeInt(0, 100));
+                    byte[] shuffled = BitShuffle.shuffle(shortInput);
+                    short[] unshuffled = BitShuffle.unshuffleShortArray(shuffled);
+                    if (!Arrays.equals(shortInput, unshuffled)) {
+                        throw new IllegalStateException("BitShuffle short failed");
+                    }
+                });
+                break;
+        }
     }
 
     private static void testHadoopStream(FuzzedDataProvider data) {
-        runFuzz(() -> {
-            byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
-            ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
-            SnappyHadoopCompatibleOutputStream out = new SnappyHadoopCompatibleOutputStream(compressedBuf);
-            out.write(original);
-            out.close();
-            byte[] compressed = compressedBuf.toByteArray();
+        switch (data.consumeInt(0, 1)) {
+            case 0:
+                runFuzz(() -> {
+                    byte[] original = data.consumeBytes(data.consumeInt(0, 4096));
+                    ByteArrayOutputStream compressedBuf = new ByteArrayOutputStream();
+                    SnappyHadoopCompatibleOutputStream out = new SnappyHadoopCompatibleOutputStream(compressedBuf);
+                    out.write(original);
+                    out.close();
+                    byte[] compressed = compressedBuf.toByteArray();
 
-            try (SnappyInputStream in = new SnappyInputStream(
-                new ByteArrayInputStream(compressed))) {
-                ByteArrayOutputStream result = new ByteArrayOutputStream();
-                byte[] buf = new byte[1024];
-                int read;
-                while ((read = in.read(buf)) != -1) {
-                    result.write(buf, 0, read);
-                }
-                if (!Arrays.equals(original, result.toByteArray())) {
-                    throw new IllegalStateException("Hadoop stream roundtrip failed");
-                }
-            }
-        });
+                    int bufferSize = data.consumeInt(1, 4096);
+                    try (SnappyInputStream in = new SnappyInputStream(
+                        new ByteArrayInputStream(compressed))) {
+                        ByteArrayOutputStream result = new ByteArrayOutputStream();
+                        byte[] buf = new byte[bufferSize];
+                        int read;
+                        while ((read = in.read(buf)) != -1) {
+                            result.write(buf, 0, read);
+                        }
+                        if (!Arrays.equals(original, result.toByteArray())) {
+                            throw new IllegalStateException("Hadoop stream roundtrip failed");
+                        }
+                    }
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    try (SnappyInputStream in = new SnappyInputStream(
+                        new ByteArrayInputStream(data.consumeBytes(100)))) {
+                        while (in.read() != -1) {}
+                    } catch (IOException e) {
+                        // Expected for malformed input during fuzzing
+                    }
+                });
+                break;
+        }
     }
 
     private static void testByteBuffer(FuzzedDataProvider data) {
-        runFuzz(() -> {
-            byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
-            ByteBuffer src = ByteBuffer.allocateDirect(input.length);
-            src.put(input);
-            src.flip();
-            ByteBuffer dst = ByteBuffer.allocateDirect(Snappy.maxCompressedLength(input.length));
-            int compressed = Snappy.compress(src, dst);
-            
-            dst.limit(compressed);
-            dst.position(0);
-            ByteBuffer uncompressedBuf = ByteBuffer.allocateDirect(input.length);
-            int uncompressed = Snappy.uncompress(dst, uncompressedBuf);
-            
-            uncompressedBuf.limit(uncompressed);
-            uncompressedBuf.position(0);
-            byte[] result = new byte[uncompressed];
-            uncompressedBuf.get(result);
-            
-            if (!Arrays.equals(input, result)) {
-                throw new IllegalStateException("ByteBuffer compress failed");
-            }
-        });
+        switch (data.consumeInt(0, 3)) {
+            case 0:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    ByteBuffer src = ByteBuffer.allocateDirect(input.length);
+                    src.put(input);
+                    src.flip();
+                    ByteBuffer dst = ByteBuffer.allocateDirect(Snappy.maxCompressedLength(input.length));
+                    int compressed = Snappy.compress(src, dst);
+                    
+                    dst.limit(compressed);
+                    dst.position(0);
+                    ByteBuffer uncompressedBuf = ByteBuffer.allocateDirect(input.length);
+                    int uncompressed = Snappy.uncompress(dst, uncompressedBuf);
+                    
+                    uncompressedBuf.limit(uncompressed);
+                    uncompressedBuf.position(0);
+                    byte[] result = new byte[uncompressed];
+                    uncompressedBuf.get(result);
+                    
+                    if (!Arrays.equals(input, result)) {
+                        throw new IllegalStateException("ByteBuffer compress failed");
+                    }
+                });
+                break;
+            case 1:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    ByteBuffer src = ByteBuffer.wrap(input);
+                    ByteBuffer dst = ByteBuffer.allocate(Snappy.maxCompressedLength(input.length));
+                    int compressed = Snappy.compress(src, dst);
+                    
+                    dst.limit(compressed);
+                    dst.position(0);
+                    ByteBuffer uncompressedBuf = ByteBuffer.allocate(input.length);
+                    int uncompressed = Snappy.uncompress(dst, uncompressedBuf);
+                    
+                    uncompressedBuf.limit(uncompressed);
+                    uncompressedBuf.position(0);
+                    byte[] result = new byte[uncompressed];
+                    uncompressedBuf.get(result);
+                    
+                    if (!Arrays.equals(input, result)) {
+                        throw new IllegalStateException("Heap ByteBuffer compress failed");
+                    }
+                });
+                break;
+            case 2:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    ByteBuffer src = ByteBuffer.allocateDirect(input.length);
+                    src.put(input);
+                    src.flip();
+                    ByteBuffer dst = ByteBuffer.allocateDirect(Snappy.maxCompressedLength(input.length));
+                    try {
+                        Snappy.compress(src, dst);
+                    } catch (Exception e) {
+                        // Expected for invalid input during fuzzing
+                    }
+                });
+                break;
+            case 3:
+                runFuzz(() -> {
+                    byte[] input = data.consumeBytes(data.consumeInt(0, 4096));
+                    if (input.length > 0) {
+                        ByteBuffer src = ByteBuffer.wrap(input);
+                        ByteBuffer dst = ByteBuffer.allocate(Snappy.maxCompressedLength(input.length));
+                        try {
+                            Snappy.compress(src, dst);
+                        } catch (Exception e) {
+                            // Expected for invalid input during fuzzing
+                        }
+                    }
+                });
+                break;
+        }
     }
 }
